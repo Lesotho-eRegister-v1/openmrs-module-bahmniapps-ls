@@ -81,6 +81,30 @@ angular
                     'layout': {templateUrl: 'views/layout.html'},
                     'content@patient.printSticker': {templateUrl: 'views/notimplemented.html'}
                 }
+            })
+            .state('newcag', {
+                url: '/cag/new',
+                views: {
+                    'layout': {templateUrl: 'views/layout.html', controller: 'CagRegisterController'},
+                    'content@newcag': {templateUrl: 'views/cagRegister.html'}
+                },
+                resolve: {
+                    initialize: function (initialization) {
+                        return initialization();
+                    }
+                }
+            })
+            .state('cag', {
+                url: '/cag/:cagUuid',
+                views: {
+                    'layout': {templateUrl: 'views/layout.html', controller: 'CagRegisterController'},
+                    'content@cag': {templateUrl: 'views/cagRegister.html'}
+                },
+                resolve: {
+                    initialize: function (initialization) {
+                        return initialization();
+                    }
+                }
             });
         $bahmniTranslateProvider.init({app: 'registration', shouldMerge: true});
     }]).run(['$rootScope', '$templateCache', '$bahmniCookieStore', 'locationService', 'messagingService', 'auditLogService',
@@ -113,7 +137,10 @@ angular
             $rootScope.createAuditLog = function (event, toState, toParams, fromState) {
                 var states = getStates(toState.name, fromState.name);
                 states.forEach(function (state) {
-                    auditLogService.log(toParams.patientUuid, Bahmni.Registration.StateNameEvenTypeMap[state], undefined, "MODULE_LABEL_REGISTRATION_KEY");
+                    var eventType = Bahmni.Registration.StateNameEvenTypeMap[state];
+                    if (eventType) {
+                        auditLogService.log(toParams.patientUuid, eventType, undefined, "MODULE_LABEL_REGISTRATION_KEY");
+                    }
                 });
             };
 

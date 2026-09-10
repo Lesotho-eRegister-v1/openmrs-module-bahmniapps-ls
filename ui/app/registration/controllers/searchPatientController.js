@@ -2,8 +2,8 @@
 
 angular.module('bahmni.registration')
     .controller('SearchPatientController', ['$rootScope', '$scope', '$location', '$window', 'spinner', 'patientService', 'appService',
-        'messagingService', '$translate', '$filter',
-        function ($rootScope, $scope, $location, $window, spinner, patientService, appService, messagingService, $translate, $filter) {
+        'messagingService', '$translate', '$filter', 'cagService',
+        function ($rootScope, $scope, $location, $window, spinner, patientService, appService, messagingService, $translate, $filter, cagService) {
             $scope.results = [];
             var searching = false;
             var maxAttributesFromConfig = 5;
@@ -303,6 +303,27 @@ angular.module('bahmni.registration')
                         });
                         spinner.forPromise(importPromise);
                         return toNativePromise(importPromise);
+                    },
+                    searchCags: function () {
+                        if (!isUserPrivilegedForSearch()) {
+                            showInsufficientPrivMessage();
+                            return Promise.reject({message: "Insufficient privilege"});
+                        }
+                        var searchPromise = cagService.getAll();
+                        spinner.forPromise(searchPromise);
+                        return toNativePromise(searchPromise);
+                    },
+                    openCag: function (cagUuid) {
+                        $location.url('/cag/' + cagUuid);
+                        if (!$scope.$$phase) {
+                            $scope.$apply();
+                        }
+                    },
+                    createCag: function () {
+                        $location.url('/cag/new');
+                        if (!$scope.$$phase) {
+                            $scope.$apply();
+                        }
                     }
                 };
             };

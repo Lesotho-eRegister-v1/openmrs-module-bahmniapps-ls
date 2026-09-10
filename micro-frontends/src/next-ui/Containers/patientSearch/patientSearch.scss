@@ -200,3 +200,21 @@
   cursor: not-allowed;
   text-decoration: none;
 }
+
+.ns-cag-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.ns-cag-toolbar__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ns-field--wide {
+  grid-column: 1 / -1;
+}

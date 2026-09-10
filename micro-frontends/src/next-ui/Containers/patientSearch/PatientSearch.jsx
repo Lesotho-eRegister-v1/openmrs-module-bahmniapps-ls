@@ -4,6 +4,7 @@ import "./patientSearch.scss";
 
 const DOMAINS = [
   { id: "local", label: "Local" },
+  { id: "cag", label: "CAG" },
   { id: "national", label: "National" },
 ];
 
@@ -12,6 +13,7 @@ const EMPTY_FORM = {
   familyName: "",
   nationalId: "",
   gender: "",
+  cagName: "",
 };
 
 function parseExtraIdentifiers(raw) {
@@ -44,12 +46,26 @@ function normalizeResults(pageOfResults = []) {
   });
 }
 
-function hasSearchCriteria(form) {
+function hasNationalCriteria(form) {
   return Boolean(
     (form.givenName && form.givenName.trim()) ||
       (form.familyName && form.familyName.trim()) ||
       (form.nationalId && form.nationalId.trim())
   );
+}
+
+function filterCags(cags, query) {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) {
+    return cags;
+  }
+  return cags.filter((cag) => {
+    const haystack = [cag.name, cag.description, cag.constituency, cag.village, cag.district]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.indexOf(q) !== -1;
+  });
 }
 
 /** NOTE: react2angular may pass hostApi as undefined initially — always optional-chain. */
@@ -58,6 +74,7 @@ export function PatientSearch(props) {
   const [domain, setDomain] = useState(initialDomain);
   const [form, setForm] = useState(EMPTY_FORM);
   const [results, setResults] = useState([]);
+  const [cagResults, setCagResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [importingEcid, setImportingEcid] = useState(null);
   const [error, setError] = useState(null);
@@ -69,7 +86,10 @@ export function PatientSearch(props) {
     }
   }, [props.hostData?.domain]);
 
-  const canSearch = useMemo(() => hasSearchCriteria(form) && !loading, [form, loading]);
+  const canSearchNational = useMemo(
+    () => hasNationalCriteria(form) && !loading,
+    [form, loading]
+  );
 
   const changeDomain = (nextDomain) => {
     if (nextDomain === domain) {
@@ -77,6 +97,7 @@ export function PatientSearch(props) {
     }
     setDomain(nextDomain);
     setResults([]);
+    setCagResults([]);
     setError(null);
     setSearched(false);
     setForm(EMPTY_FORM);
@@ -91,13 +112,14 @@ export function PatientSearch(props) {
   const clearForm = () => {
     setForm(EMPTY_FORM);
     setResults([]);
+    setCagResults([]);
     setError(null);
     setSearched(false);
   };
 
-  const runSearch = async (event) => {
+  const runNationalSearch = async (event) => {
     event.preventDefault();
-    if (!canSearch) {
+    if (!canSearchNational) {
       return;
     }
     setLoading(true);
@@ -110,8 +132,7 @@ export function PatientSearch(props) {
         nationalId: form.nationalId.trim(),
         gender: form.gender || undefined,
       });
-      const page = normalizeResults(response?.pageOfResults || []);
-      setResults(page);
+      setResults(normalizeResults(response?.pageOfResults || []));
     } catch (e) {
       setResults([]);
       setError(
@@ -120,6 +141,24 @@ export function PatientSearch(props) {
             ? "National MPI endpoint not found on this server (404)."
             : "National search failed. Check MPI connectivity and try again.")
       );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runCagSearch = async (event) => {
+    if (event) {
+      event.preventDefault();
+    }
+    setLoading(true);
+    setError(null);
+    setSearched(true);
+    try {
+      const all = (await props.hostApi?.searchCags?.()) || [];
+      setCagResults(filterCags(all, form.cagName));
+    } catch (e) {
+      setCagResults([]);
+      setError(e?.message || "Could not load Community ART Groups.");
     } finally {
       setLoading(false);
     }
@@ -160,6 +199,98 @@ export function PatientSearch(props) {
         ))}
       </div>
 
+      {domain === "cag" && (
+        <div className="ns-panel">
+          <div className="ns-cag-toolbar">
+            <div>
+              <h3 className="ns-panel__title">Community ART Groups</h3>
+              <p className="ns-panel__hint" style={{ marginBottom: 0 }}>
+                Search groups by name, or create a new CAG.
+              </p>
+            </div>
+            <div className="ns-cag-toolbar__actions">
+              <button
+                type="button"
+                className="ns-btn ns-btn--primary"
+                onClick={() => props.hostApi?.createCag?.()}
+              >
+                Create CAG
+              </button>
+            </div>
+          </div>
+
+          <form className="ns-form" onSubmit={runCagSearch}>
+            <div className="ns-field ns-field--wide">
+              <label htmlFor="ns-cag-name">CAG name</label>
+              <input
+                id="ns-cag-name"
+                type="text"
+                value={form.cagName}
+                onChange={updateField("cagName")}
+                placeholder="Search by CAG name (leave blank to list all)"
+                autoComplete="off"
+              />
+            </div>
+            <div className="ns-actions">
+              <button type="submit" className="ns-btn ns-btn--primary" disabled={loading}>
+                {loading ? "Searching…" : "Search"}
+              </button>
+              <button
+                type="button"
+                className="ns-btn ns-btn--ghost"
+                onClick={clearForm}
+                disabled={loading}
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+
+          {error && <div className="ns-status ns-status--error">{error}</div>}
+          {!error && loading && <div className="ns-status">Loading groups…</div>}
+          {!error && !loading && searched && cagResults.length === 0 && (
+            <div className="ns-status">No CAGs found.</div>
+          )}
+
+          {cagResults.length > 0 && (
+            <div className="ns-table-wrap">
+              <table className="ns-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Village</th>
+                    <th>Constituency</th>
+                    <th>District</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cagResults.map((cag) => (
+                    <tr key={cag.uuid}>
+                      <td>{cag.name || "—"}</td>
+                      <td>{cag.description || "—"}</td>
+                      <td>{cag.village || "—"}</td>
+                      <td>{cag.constituency || "—"}</td>
+                      <td>{cag.district || "—"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="ns-link"
+                          onClick={() => props.hostApi?.openCag?.(cag.uuid)}
+                        >
+                          Open
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {domain === "national" && (
         <div className="ns-panel">
           <h3 className="ns-panel__title">National patient search</h3>
@@ -168,7 +299,7 @@ export function PatientSearch(props) {
             the patient locally.
           </p>
 
-          <form className="ns-form" onSubmit={runSearch}>
+          <form className="ns-form" onSubmit={runNationalSearch}>
             <div className="ns-field">
               <label htmlFor="ns-national-id">National ID</label>
               <input
@@ -218,7 +349,7 @@ export function PatientSearch(props) {
               <button
                 type="submit"
                 className="ns-btn ns-btn--primary"
-                disabled={!canSearch}
+                disabled={!canSearchNational}
               >
                 {loading ? "Searching…" : "Search"}
               </button>
@@ -305,5 +436,8 @@ PatientSearch.propTypes = {
     onDomainChange: PropTypes.func,
     searchNational: PropTypes.func,
     importPatient: PropTypes.func,
+    searchCags: PropTypes.func,
+    openCag: PropTypes.func,
+    createCag: PropTypes.func,
   }),
 };
