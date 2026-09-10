@@ -1,8 +1,8 @@
 'use strict';
 
 angular.module('bahmni.registration')
-    .controller('CagRegisterController', ['$scope', '$location', '$stateParams', '$window', 'spinner', 'cagService', 'patientService', 'messagingService',
-        function ($scope, $location, $stateParams, $window, spinner, cagService, patientService, messagingService) {
+    .controller('CagRegisterController', ['$scope', '$location', '$stateParams', '$window', '$bahmniCookieStore', 'spinner', 'cagService', 'patientService', 'messagingService',
+        function ($scope, $location, $stateParams, $window, $bahmniCookieStore, spinner, cagService, patientService, messagingService) {
             var isNew = !$stateParams.cagUuid || $stateParams.cagUuid === 'new' || $location.path() === '/cag/new';
 
             $scope.cagHostData = {
@@ -30,9 +30,37 @@ angular.module('bahmni.registration')
                 return "Request failed";
             };
 
+            var getLoginLocation = function () {
+                return $bahmniCookieStore.get(Bahmni.Common.Constants.locationCookieName) || {};
+            };
+
             $scope.cagHostApi = {
                 getCag: function (uuid) {
-                    var promise = cagService.getByUuid(uuid);
+                    var promise = cagService.getByUuid(uuid).then(function (cag) {
+                        var members = cag.cagPatientList || [];
+                        var checks = members.map(function (member) {
+                            return cagService.getActiveVisitByAttender(member.uuid).then(function (activeVisit) {
+                                return {memberUuid: member.uuid, activeVisit: activeVisit};
+                            }, function () {
+                                return {memberUuid: member.uuid, activeVisit: null};
+                            });
+                        });
+                        return Promise.all(checks).then(function (results) {
+                            var activeAttenderUuid = null;
+                            var activeVisits = [];
+                            results.forEach(function (item) {
+                                if (item.activeVisit && !activeAttenderUuid) {
+                                    activeAttenderUuid = item.activeVisit.attender && item.activeVisit.attender.uuid;
+                                    activeVisits = item.activeVisit.visits || [];
+                                }
+                            });
+                            cag.activeAttenderUuid = activeAttenderUuid || "";
+                            cag.activeVisitPatientUuids = activeVisits.map(function (visit) {
+                                return visit.patient && visit.patient.uuid;
+                            }).filter(Boolean);
+                            return cag;
+                        });
+                    });
                     spinner.forPromise(promise);
                     return toNativePromise(promise);
                 },
@@ -73,6 +101,33 @@ angular.module('bahmni.registration')
                     });
                     spinner.forPromise(promise);
                     return toNativePromise(promise);
+                },
+                startVisit: function (cagUuid, attenderUuid, members) {
+                    var location = getLoginLocation();
+                    if (!location.uuid) {
+                        return Promise.reject({message: "Login location not found"});
+                    }
+                    var promise = cagService.startVisit(
+                        cagUuid,
+                        attenderUuid,
+                        members,
+                        location.uuid,
+                        location.name
+                    ).then(function (result) {
+                        messagingService.showMessage('info', 'CAG Visit Opened');
+                        $location.path('/patient/' + attenderUuid + '/visit');
+                        return result;
+                    }, function (error) {
+                        throw {message: extractErrorMessage(error)};
+                    });
+                    spinner.forPromise(promise);
+                    return toNativePromise(promise);
+                },
+                enterVisit: function (patientUuid) {
+                    $location.path('/patient/' + patientUuid + '/visit');
+                    if (!$scope.$$phase) {
+                        $scope.$apply();
+                    }
                 },
                 openPatient: function (patientUuid) {
                     $window.open('#/patient/' + patientUuid, '_blank');

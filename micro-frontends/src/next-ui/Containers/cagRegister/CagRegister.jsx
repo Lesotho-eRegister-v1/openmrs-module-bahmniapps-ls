@@ -14,6 +14,32 @@ function memberLabel(member) {
   return member.display || member.identifier || member.uuid || "Member";
 }
 
+function normalizeMembers(list, activeAttenderUuid, activeVisitPatientUuids) {
+  const visitUuids = activeVisitPatientUuids || [];
+  const hasActiveVisit = Boolean(activeAttenderUuid);
+
+  return (list || []).map((member) => {
+    const onActiveVisit = visitUuids.includes(member.uuid);
+    let presentMember =
+      member.presentMember !== undefined ? member.presentMember : true;
+    let absenteeReason = member.absenteeReason || "";
+
+    if (hasActiveVisit && !onActiveVisit) {
+      presentMember = false;
+      absenteeReason = absenteeReason || "absent";
+    } else if (!hasActiveVisit) {
+      presentMember = true;
+      absenteeReason = "";
+    }
+
+    return {
+      ...member,
+      presentMember,
+      absenteeReason,
+    };
+  });
+}
+
 /** NOTE: react2angular may pass hostApi as undefined initially — always optional-chain. */
 export function CagRegister(props) {
   const isNew = Boolean(props.hostData?.isNew);
@@ -21,14 +47,18 @@ export function CagRegister(props) {
 
   const [form, setForm] = useState(EMPTY_CAG);
   const [members, setMembers] = useState([]);
+  const [activeAttenderUuid, setActiveAttenderUuid] = useState("");
   const [patientQuery, setPatientQuery] = useState("");
   const [patientSuggestions, setPatientSuggestions] = useState([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [busyPatientUuid, setBusyPatientUuid] = useState(null);
+  const [startingVisitUuid, setStartingVisitUuid] = useState(null);
   const [error, setError] = useState(null);
   const [info, setInfo] = useState(null);
   const [uuid, setUuid] = useState(cagUuid);
+
+  const visitLocked = Boolean(activeAttenderUuid);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +78,10 @@ export function CagRegister(props) {
         if (cancelled) {
           return;
         }
+        const attender = cag?.activeAttenderUuid || "";
+        const visitPatientUuids = cag?.activeVisitPatientUuids || [];
         setUuid(cag?.uuid || cagUuid);
+        setActiveAttenderUuid(attender);
         setForm({
           name: cag?.name || "",
           description: cag?.description || "",
@@ -56,7 +89,9 @@ export function CagRegister(props) {
           constituency: cag?.constituency || "",
           district: cag?.district || "",
         });
-        setMembers(cag?.cagPatientList || []);
+        setMembers(
+          normalizeMembers(cag?.cagPatientList || [], attender, visitPatientUuids)
+        );
       } catch (e) {
         if (!cancelled) {
           setError(e?.message || "Could not load CAG.");
@@ -77,6 +112,34 @@ export function CagRegister(props) {
   const updateField = (field) => (event) => {
     const value = event.target.value;
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const togglePresent = (memberUuid, present) => {
+    if (visitLocked) {
+      return;
+    }
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.uuid === memberUuid
+          ? {
+              ...m,
+              presentMember: present,
+              absenteeReason: present ? "" : m.absenteeReason || "",
+            }
+          : m
+      )
+    );
+  };
+
+  const setAbsenteeReason = (memberUuid, reason) => {
+    if (visitLocked) {
+      return;
+    }
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.uuid === memberUuid ? { ...m, absenteeReason: reason } : m
+      )
+    );
   };
 
   const saveCag = async (event) => {
@@ -152,7 +215,16 @@ export function CagRegister(props) {
       patient.uuid;
 
     if (!uuid) {
-      setMembers((prev) => prev.concat([{ uuid: patient.uuid, display }]));
+      setMembers((prev) =>
+        prev.concat([
+          {
+            uuid: patient.uuid,
+            display,
+            presentMember: true,
+            absenteeReason: "",
+          },
+        ])
+      );
       setPatientSuggestions([]);
       setPatientQuery("");
       setInfo("Member added. Save the CAG to keep changes.");
@@ -163,7 +235,16 @@ export function CagRegister(props) {
     setError(null);
     try {
       await props.hostApi?.addMember?.(uuid, patient.uuid);
-      setMembers((prev) => prev.concat([{ uuid: patient.uuid, display }]));
+      setMembers((prev) =>
+        prev.concat([
+          {
+            uuid: patient.uuid,
+            display,
+            presentMember: true,
+            absenteeReason: "",
+          },
+        ])
+      );
       setPatientSuggestions([]);
       setPatientQuery("");
       setInfo("Member added.");
@@ -175,7 +256,7 @@ export function CagRegister(props) {
   };
 
   const removeMember = async (member) => {
-    if (!member?.uuid) {
+    if (!member?.uuid || visitLocked) {
       return;
     }
     if (!uuid) {
@@ -193,6 +274,28 @@ export function CagRegister(props) {
     } finally {
       setBusyPatientUuid(null);
     }
+  };
+
+  const startVisit = async (member) => {
+    if (!uuid || !member?.uuid || !member.presentMember || visitLocked) {
+      return;
+    }
+    setStartingVisitUuid(member.uuid);
+    setError(null);
+    setInfo(null);
+    try {
+      await props.hostApi?.startVisit?.(uuid, member.uuid, members);
+    } catch (e) {
+      setError(e?.message || "Could not start CAG visit.");
+      setStartingVisitUuid(null);
+    }
+  };
+
+  const enterVisit = (member) => {
+    if (!member?.uuid) {
+      return;
+    }
+    props.hostApi?.enterVisit?.(member.uuid);
   };
 
   if (loading) {
@@ -300,76 +403,152 @@ export function CagRegister(props) {
         <section className="cag-section">
           <h2 className="cag-section__title">
             CAG Members List{" "}
-            <span className="cag-note">
-              (Note: visit start comes in a later update)
-            </span>
+            {uuid && members.length > 0 && (
+              <span className="cag-note">
+                (Note: If member absent for visit, turn toggle off)
+              </span>
+            )}
           </h2>
 
           {members.length === 0 ? (
             <div className="cag-message">No members yet.</div>
           ) : (
             <ul className="cag-member-list">
-              {members.map((member) => (
-                <li key={member.uuid} className="cag-member-row">
-                  <button
-                    type="button"
-                    className="cag-member-name"
-                    onClick={() => props.hostApi?.openPatient?.(member.uuid)}
-                  >
-                    {memberLabel(member)}
-                  </button>
-                  <button
-                    type="button"
-                    className="cag-remove"
-                    disabled={busyPatientUuid === member.uuid}
-                    onClick={() => removeMember(member)}
-                    title="Remove"
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
+              {members.map((member) => {
+                const isAttender = activeAttenderUuid === member.uuid;
+                const showStart =
+                  uuid && member.presentMember && !visitLocked;
+                const showEnter =
+                  uuid && member.presentMember && isAttender;
+                const showRefill =
+                  uuid &&
+                  member.presentMember &&
+                  visitLocked &&
+                  !isAttender;
+                const showAbsentReason = uuid && !member.presentMember;
+
+                return (
+                  <li key={member.uuid} className="cag-member-row">
+                    {uuid && (
+                      <label className="cag-switch">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(member.presentMember)}
+                          disabled={visitLocked}
+                          onChange={(e) =>
+                            togglePresent(member.uuid, e.target.checked)
+                          }
+                        />
+                        <span className="cag-switch__slider" />
+                      </label>
+                    )}
+
+                    <button
+                      type="button"
+                      className="cag-member-name"
+                      onClick={() => props.hostApi?.openPatient?.(member.uuid)}
+                    >
+                      {memberLabel(member)}
+                    </button>
+
+                    <div className="cag-member-actions">
+                      {showStart && (
+                        <button
+                          type="button"
+                          className="cag-visit-btn"
+                          disabled={startingVisitUuid === member.uuid}
+                          onClick={() => startVisit(member)}
+                        >
+                          {startingVisitUuid === member.uuid
+                            ? "Starting…"
+                            : "Start Visit (Present Member)"}
+                        </button>
+                      )}
+                      {showEnter && (
+                        <button
+                          type="button"
+                          className="cag-visit-btn"
+                          onClick={() => enterVisit(member)}
+                        >
+                          Enter Present Member Visit Details
+                        </button>
+                      )}
+                      {showRefill && (
+                        <p className="cag-refill">
+                          Sent Present Member for refill
+                        </p>
+                      )}
+                      {showAbsentReason && (
+                        <input
+                          type="text"
+                          className="cag-absent-reason"
+                          value={member.absenteeReason || ""}
+                          disabled={visitLocked}
+                          placeholder="Reason Absent for visit"
+                          onChange={(e) =>
+                            setAbsenteeReason(member.uuid, e.target.value)
+                          }
+                        />
+                      )}
+                    </div>
+
+                    {!visitLocked && (
+                      <button
+                        type="button"
+                        className="cag-remove"
+                        disabled={busyPatientUuid === member.uuid}
+                        onClick={() => removeMember(member)}
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
 
-          <div className="cag-add-member">
-            <label className="cag-add-label" htmlFor="cag-patient-query">
-              Add Patient to CAG List
-            </label>
-            <div className="cag-add-row">
-              <input
-                id="cag-patient-query"
-                type="text"
-                value={patientQuery}
-                onChange={(e) => setPatientQuery(e.target.value)}
-                placeholder="Search patient"
-              />
-              <button
-                type="button"
-                className="cag-add-btn"
-                onClick={searchPatients}
-              >
-                +
-              </button>
+          {!visitLocked && (
+            <div className="cag-add-member">
+              <label className="cag-add-label" htmlFor="cag-patient-query">
+                Add Patient to CAG List
+              </label>
+              <div className="cag-add-row">
+                <input
+                  id="cag-patient-query"
+                  type="text"
+                  value={patientQuery}
+                  onChange={(e) => setPatientQuery(e.target.value)}
+                  placeholder="Search patient"
+                />
+                <button
+                  type="button"
+                  className="cag-add-btn"
+                  onClick={searchPatients}
+                >
+                  +
+                </button>
+              </div>
+              {patientSuggestions.length > 0 && (
+                <ul className="cag-suggestions">
+                  {patientSuggestions.map((patient) => (
+                    <li key={patient.uuid}>
+                      <button
+                        type="button"
+                        disabled={busyPatientUuid === patient.uuid}
+                        onClick={() => addMember(patient)}
+                      >
+                        {patient.identifier || "—"} — {patient.givenName}{" "}
+                        {patient.familyName}
+                        {patient.age != null ? ` (${patient.age} yrs)` : ""}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            {patientSuggestions.length > 0 && (
-              <ul className="cag-suggestions">
-                {patientSuggestions.map((patient) => (
-                  <li key={patient.uuid}>
-                    <button
-                      type="button"
-                      disabled={busyPatientUuid === patient.uuid}
-                      onClick={() => addMember(patient)}
-                    >
-                      {patient.identifier || "—"} — {patient.givenName}{" "}
-                      {patient.familyName}
-                      {patient.age != null ? ` (${patient.age} yrs)` : ""}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          )}
         </section>
 
         <div className="cag-footer">
@@ -398,6 +577,8 @@ CagRegister.propTypes = {
     searchPatients: PropTypes.func,
     addMember: PropTypes.func,
     removeMember: PropTypes.func,
+    startVisit: PropTypes.func,
+    enterVisit: PropTypes.func,
     openPatient: PropTypes.func,
     afterSave: PropTypes.func,
     backToSearch: PropTypes.func,
