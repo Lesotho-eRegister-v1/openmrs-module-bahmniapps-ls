@@ -1,5 +1,10 @@
 <section class="reg-search-wrapper">
-    <section class="reg-search">
+    <mfe-next-ui-patient-search
+        host-data="patientSearchHostData"
+        host-api="patientSearchHostApi">
+    </mfe-next-ui-patient-search>
+
+    <section class="reg-search" ng-show="searchDomain === 'local'">
         <article class="search-seperator-l" ng-if="::patientIdentifierSearchConfig.show">
             <form name="searchByIdForm" ng-submit="searchById()" class="simple-form-ui clearfix" >
                     <label for="registrationNumber"><strong style="padding-left: 5px;">{{ ::'REGISTRATION_LABEL_PATIENT_ID' | translate}}</strong></label>
@@ -45,7 +50,7 @@
         </article>
     </section>
 
-    <div class="note-container no-search-results" ng-if="noResultsMessage">
+    <div class="note-container no-search-results" ng-if="searchDomain === 'local' && noResultsMessage">
         <div class="note warning">
             <div class="text">
                 <p>{{noResultsMessage | translate:patientIdentifier }}</p>
@@ -53,7 +58,7 @@
         </div>
     </div>
 
-    <div ng-if="resultsPresent()" infinite-scroll="nextPage()" infinite-scroll-immediate-check="false" infinite-scroll-disabled="noMoreResultsPresent" class="registraition-search-results-container">
+    <div ng-if="searchDomain === 'local' && resultsPresent()" infinite-scroll="nextPage()" infinite-scroll-immediate-check="false" infinite-scroll-disabled="noMoreResultsPresent" class="registraition-search-results-container">
         <table class="table">
             <thead>
             <tr>
@@ -93,9 +98,9 @@
         </table>
     </div>
 
-    <div id="loader" ng-show="loadingMoreResults()"></div>
+    <div id="loader" ng-show="searchDomain === 'local' && loadingMoreResults()"></div>
 
-    <div class="note-container no-more-results" ng-if="noMoreResultsPresent">
+    <div class="note-container no-more-results" ng-if="searchDomain === 'local' && noMoreResultsPresent">
         <div class="note warning">
             <div class="text">
                     <p>{{ ::'REGISTRATION_LABEL_NO_RESULTS' | translate}}</p>

@@ -30,6 +30,41 @@ angular.module('bahmni.registration')
             return patientServiceStrategy.search(config);
         };
 
+        var searchHIE = function (query, surname, identifier, nationalId, gender, addressFieldName, addressFieldValue, customAttributeValue,
+                                  offset, customAttributeFields, programAttributeFieldName, programAttributeFieldValue, addressSearchResultsConfig,
+                                  patientSearchResultsConfig, filterOnAllIdentifiers) {
+            var nameQuery = [query, surname].filter(function (part) {
+                return part && String(part).trim().length > 0;
+            }).join(" ");
+            var config = {
+                params: {
+                    q: nameQuery,
+                    surname: surname,
+                    identifier: identifier,
+                    nationalId: nationalId,
+                    gender: gender,
+                    s: "byIdOrNameOrVillage",
+                    addressFieldName: addressFieldName,
+                    addressFieldValue: addressFieldValue,
+                    customAttribute: customAttributeValue,
+                    startIndex: offset || 0,
+                    patientAttributes: customAttributeFields,
+                    programAttributeFieldName: programAttributeFieldName,
+                    programAttributeFieldValue: programAttributeFieldValue,
+                    addressSearchResultsConfig: addressSearchResultsConfig,
+                    patientSearchResultsConfig: patientSearchResultsConfig,
+                    loginLocationUuid: sessionService.getLoginLocationUuid(),
+                    filterOnAllIdentifiers: filterOnAllIdentifiers
+                },
+                withCredentials: true
+            };
+            return patientServiceStrategy.searchHIE(config);
+        };
+
+        var importPatient = function (patient) {
+            return patientServiceStrategy.importPatient(patient, {withCredentials: true});
+        };
+
         var searchByIdentifier = function (identifier) {
             return $http.get(Bahmni.Common.Constants.bahmniCommonsSearchUrl + "/patient", {
                 method: "GET",
@@ -106,6 +141,8 @@ angular.module('bahmni.registration')
 
         return {
             search: search,
+            searchHIE: searchHIE,
+            importPatient: importPatient,
             searchByIdentifier: searchByIdentifier,
             create: create,
             update: update,

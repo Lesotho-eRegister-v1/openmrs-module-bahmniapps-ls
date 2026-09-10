@@ -21,6 +21,50 @@ angular.module('bahmni.registration')
             return defer.promise;
         };
 
+        var searchHIE = function (config) {
+            var defer = $q.defer();
+            var patientSearchUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient";
+            if (config && config.params.identifier) {
+                patientSearchUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient/exact";
+            }
+            $http.get(patientSearchUrl, config).success(function (result) {
+                defer.resolve(result);
+            }).error(function (data, status) {
+                defer.reject({
+                    data: data,
+                    status: status,
+                    message: status === 404
+                        ? "National MPI endpoint is not available on this OpenMRS (404). The /mpipatient API is missing from the local backend."
+                        : ("National search failed (HTTP " + status + ").")
+                });
+            });
+            return defer.promise;
+        };
+
+        var importPatient = function (patient, config) {
+            var defer = $q.defer();
+            var extraIdentifiers = patient && patient.extraIdentifiers;
+            if (extraIdentifiers && typeof extraIdentifiers === "string") {
+                try {
+                    extraIdentifiers = JSON.parse(extraIdentifiers);
+                } catch (e) {
+                    extraIdentifiers = {};
+                }
+            }
+            var patientEcid = (extraIdentifiers && (extraIdentifiers.ECID || extraIdentifiers.ecid)) || patient.ecid;
+            if (!patientEcid) {
+                defer.reject({message: "Missing ECID for national patient import"});
+                return defer.promise;
+            }
+            var importPatientUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient?patientEcid=" + encodeURIComponent(patientEcid);
+            $http.post(importPatientUrl, config || {withCredentials: true}).success(function (result) {
+                defer.resolve(result);
+            }).error(function (error) {
+                defer.reject(error);
+            });
+            return defer.promise;
+        };
+
         var getByUuid = function (uuid) {
             var url = openmrsUrl + "/ws/rest/v1/patientprofile/" + uuid;
             var config = {
@@ -73,6 +117,8 @@ angular.module('bahmni.registration')
 
         return {
             search: search,
+            searchHIE: searchHIE,
+            importPatient: importPatient,
             get: getByUuid,
             create: create,
             update: update,
