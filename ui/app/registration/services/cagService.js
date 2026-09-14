@@ -1,7 +1,7 @@
 'use strict';
 
 angular.module('bahmni.registration')
-    .service('cagService', ['$http', function ($http) {
+    .service('cagService', ['$http', '$q', function ($http, $q) {
         var baseUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/cag';
         var cagPatientUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/cagPatient';
         var cagVisitUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/cagVisit';
@@ -37,16 +37,40 @@ angular.module('bahmni.registration')
             });
         };
 
+        // CAG module often persists successfully then 500s while serializing
+        // Person <-> User creator graphs in the response body.
+        var recoverAfterSaveSerializationFailure = function (error, cag, uuid) {
+            if (!error || error.status !== 500) {
+                return $q.reject(error);
+            }
+            if (uuid) {
+                return getByUuid(uuid);
+            }
+            if (cag && cag.name) {
+                return getAll().then(function (results) {
+                    var match = _.find(results, function (item) {
+                        return item && item.name === cag.name;
+                    });
+                    return match ? match : $q.reject(error);
+                });
+            }
+            return $q.reject(error);
+        };
+
         var save = function (cag, uuid) {
             var url = uuid ? (baseUrl + '/' + uuid) : baseUrl;
             return $http.post(url, cag, {
                 withCredentials: true,
+                // CAG module often 500s on response serialization after a successful write
+                disableErrors: true,
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
                 }
             }).then(function (response) {
                 return response.data;
+            }, function (error) {
+                return recoverAfterSaveSerializationFailure(error, cag, uuid);
             });
         };
 
@@ -81,6 +105,28 @@ angular.module('bahmni.registration')
             }).then(function (response) {
                 var results = (response.data && response.data.results) || [];
                 return results.length ? results[0] : null;
+            });
+        };
+
+        var closeVisit = function (cagVisitUuid) {
+            var dateStopped = new Date().toISOString().slice(0, 19).replace("T", " ");
+            return $http.post(cagVisitUrl + '/' + cagVisitUuid, {
+                dateStopped: dateStopped
+            }, {
+                withCredentials: true,
+                // Same CAG module response-serialization 500 as save
+                disableErrors: true,
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            }).then(function (response) {
+                return response.data;
+            }, function (error) {
+                if (error && error.status === 500) {
+                    return {uuid: cagVisitUuid, dateStopped: dateStopped, isActive: false};
+                }
+                return $q.reject(error);
             });
         };
 
@@ -217,6 +263,7 @@ angular.module('bahmni.registration')
             addPatient: addPatient,
             removePatient: removePatient,
             getActiveVisitByAttender: getActiveVisitByAttender,
+            closeVisit: closeVisit,
             startVisit: startVisit
         };
     }]);

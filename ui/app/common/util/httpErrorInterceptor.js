@@ -35,6 +35,9 @@ angular.module('httpErrorInterceptor', [])
             }
 
             function error (response) {
+                if (response.config && response.config.disableErrors) {
+                    return $q.reject(response);
+                }
                 var data = response.data;
                 var unexpectedError = "There was an unexpected issue on the server. Please try again";
                 if (response.status === 500) {

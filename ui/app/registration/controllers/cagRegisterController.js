@@ -18,11 +18,17 @@ angular.module('bahmni.registration')
                 if (!error) {
                     return "Request failed";
                 }
-                if (error.message) {
+                if (typeof error === 'string') {
+                    return error;
+                }
+                if (error.message && typeof error.message === 'string' && error.message.indexOf('[object') !== 0) {
                     return error.message;
                 }
                 if (error.data && error.data.error && error.data.error.message) {
                     return error.data.error.message;
+                }
+                if (error.data && typeof error.data === 'string' && error.data.indexOf('<html') === -1) {
+                    return error.data;
                 }
                 if (error.status) {
                     return "Request failed (HTTP " + error.status + ")";
@@ -47,14 +53,17 @@ angular.module('bahmni.registration')
                         });
                         return Promise.all(checks).then(function (results) {
                             var activeAttenderUuid = null;
+                            var activeVisitUuid = null;
                             var activeVisits = [];
                             results.forEach(function (item) {
                                 if (item.activeVisit && !activeAttenderUuid) {
                                     activeAttenderUuid = item.activeVisit.attender && item.activeVisit.attender.uuid;
+                                    activeVisitUuid = item.activeVisit.uuid;
                                     activeVisits = item.activeVisit.visits || [];
                                 }
                             });
                             cag.activeAttenderUuid = activeAttenderUuid || "";
+                            cag.activeVisitUuid = activeVisitUuid || "";
                             cag.activeVisitPatientUuids = activeVisits.map(function (visit) {
                                 return visit.patient && visit.patient.uuid;
                             }).filter(Boolean);
@@ -66,7 +75,6 @@ angular.module('bahmni.registration')
                 },
                 saveCag: function (payload, uuid) {
                     var promise = cagService.save(payload, uuid).then(function (saved) {
-                        messagingService.showMessage('info', 'CAG saved');
                         return saved;
                     }, function (error) {
                         throw {message: extractErrorMessage(error)};
@@ -84,7 +92,6 @@ angular.module('bahmni.registration')
                 },
                 addMember: function (cagUuid, patientUuid) {
                     var promise = cagService.addPatient(cagUuid, patientUuid).then(function (result) {
-                        messagingService.showMessage('info', 'Patient added to CAG');
                         return result;
                     }, function (error) {
                         throw {message: extractErrorMessage(error)};
@@ -94,7 +101,6 @@ angular.module('bahmni.registration')
                 },
                 removeMember: function (patientUuid) {
                     var promise = cagService.removePatient(patientUuid).then(function (result) {
-                        messagingService.showMessage('info', 'Patient removed from CAG');
                         return result;
                     }, function (error) {
                         throw {message: extractErrorMessage(error)};
@@ -114,8 +120,16 @@ angular.module('bahmni.registration')
                         location.uuid,
                         location.name
                     ).then(function (result) {
-                        messagingService.showMessage('info', 'CAG Visit Opened');
                         $location.path('/patient/' + attenderUuid + '/visit');
+                        return result;
+                    }, function (error) {
+                        throw {message: extractErrorMessage(error)};
+                    });
+                    spinner.forPromise(promise);
+                    return toNativePromise(promise);
+                },
+                closeVisit: function (cagVisitUuid) {
+                    var promise = cagService.closeVisit(cagVisitUuid).then(function (result) {
                         return result;
                     }, function (error) {
                         throw {message: extractErrorMessage(error)};
