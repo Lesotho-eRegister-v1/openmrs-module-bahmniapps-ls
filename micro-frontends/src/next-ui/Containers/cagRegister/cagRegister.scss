@@ -185,13 +185,41 @@
   cursor: not-allowed;
 }
 
-.cag-absent-reason {
+.cag-absent-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
   width: 100%;
+}
+
+.cag-absent-reason {
+  flex: 1;
+  min-width: 0;
   box-sizing: border-box;
   border: 1px solid #bbb;
   border-radius: 2px;
   padding: 0.4rem 0.5rem;
   font: inherit;
+}
+
+.cag-absent-apply {
+  appearance: none;
+  border: 0;
+  flex: 0 0 auto;
+  background: #0078a1;
+  color: #fff;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: 2px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cag-absent-confirmed {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #8a6d3b;
 }
 
 .cag-refill {

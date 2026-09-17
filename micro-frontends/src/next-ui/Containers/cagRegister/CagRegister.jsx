@@ -138,6 +138,7 @@ export function CagRegister(props) {
               ...m,
               presentMember: present,
               absenteeReason: present ? "" : m.absenteeReason || "",
+              absentConfirmed: present ? false : false,
             }
           : m
       )
@@ -150,7 +151,28 @@ export function CagRegister(props) {
     }
     setMembers((prev) =>
       prev.map((m) =>
-        m.uuid === memberUuid ? { ...m, absenteeReason: reason } : m
+        m.uuid === memberUuid
+          ? { ...m, absenteeReason: reason, absentConfirmed: false }
+          : m
+      )
+    );
+  };
+
+  const confirmAbsent = (member) => {
+    if (!member?.uuid || visitLocked || member.presentMember !== false) {
+      return;
+    }
+    const reason = (member.absenteeReason || "").trim() || "absent";
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.uuid === member.uuid
+          ? {
+              ...m,
+              presentMember: false,
+              absenteeReason: reason,
+              absentConfirmed: true,
+            }
+          : m
       )
     );
   };
@@ -499,7 +521,7 @@ export function CagRegister(props) {
           CAG Members List{" "}
           {uuid && members.length > 0 && !visitLocked && (
             <span className="cag-note">
-              (Note: If member absent for visit, turn toggle off)
+              (Note: Turn toggle off, enter reason, press Enter or Apply)
             </span>
           )}
         </h2>
@@ -567,17 +589,37 @@ export function CagRegister(props) {
                         Sent Present Member for refill
                       </p>
                     )}
-                    {showAbsentReason && (
-                      <input
-                        type="text"
-                        className="cag-absent-reason"
-                        value={member.absenteeReason || ""}
-                        disabled={visitLocked}
-                        placeholder="Reason Absent for visit"
-                        onChange={(e) =>
-                          setAbsenteeReason(member.uuid, e.target.value)
-                        }
-                      />
+                    {showAbsentReason && member.absentConfirmed && (
+                      <p className="cag-absent-confirmed">
+                        Absent for visit: {member.absenteeReason || "absent"}
+                      </p>
+                    )}
+                    {showAbsentReason && !member.absentConfirmed && (
+                      <div className="cag-absent-row">
+                        <input
+                          type="text"
+                          className="cag-absent-reason"
+                          value={member.absenteeReason || ""}
+                          disabled={visitLocked}
+                          placeholder="Reason Absent for visit"
+                          onChange={(e) =>
+                            setAbsenteeReason(member.uuid, e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              confirmAbsent(member);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="cag-absent-apply"
+                          onClick={() => confirmAbsent(member)}
+                        >
+                          Apply
+                        </button>
+                      </div>
                     )}
                   </div>
 
