@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
+import PropTypes from "prop-types";
 import "./loginVersion.scss";
 
 const VERSION_URLS = [
-  // Preferred: facility config (updateable without rebuilding apps)
   "/bahmni_config/openmrs/apps/home/version.json",
-  // Fallback: shipped with Home app (same pattern as old 0.92)
-  "version.json",
+  "/bahmni/home/version.json",
 ];
 
 function formatVersion(data) {
@@ -15,6 +14,7 @@ function formatVersion(data) {
   return `Version :${data.day}-${data.month}-${data.year}`;
 }
 
+/** NOTE: react2angular may omit props at start — keep PropTypes so the bridge mounts. */
 export function LoginVersion() {
   const [label, setLabel] = useState(null);
 
@@ -56,3 +56,8 @@ export function LoginVersion() {
     </p>
   );
 }
+
+LoginVersion.propTypes = {
+  hostData: PropTypes.object,
+  hostApi: PropTypes.object,
+};

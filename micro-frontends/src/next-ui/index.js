@@ -39,4 +39,7 @@ builder.createComponentWithTranslationForwarding(
     OtNotesDeletePopup
 );
 
-builder.createComponent("LoginVersion", LoginVersion);
+builder.createComponentWithTranslationForwarding(
+  "LoginVersion",
+  LoginVersion
+);
