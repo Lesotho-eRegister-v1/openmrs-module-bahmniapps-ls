@@ -521,7 +521,8 @@ export function CagRegister(props) {
           CAG Members List{" "}
           {uuid && members.length > 0 && !visitLocked && (
             <span className="cag-note">
-              (Note: Turn toggle off, enter reason, press Enter or Apply)
+              (Note: Turn toggle off + Apply reason. Absent is sent only when
+              you Start Visit — not on Save/refresh)
             </span>
           )}
         </h2>
