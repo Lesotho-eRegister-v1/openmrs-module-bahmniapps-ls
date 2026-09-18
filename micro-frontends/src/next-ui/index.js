@@ -5,6 +5,7 @@ import { ProviderNotifications } from "./Containers/providerNotifications/Provid
 import { OtNotesSavePopup, OtNotesDeletePopup } from "./Containers/otNotes/OtNotes";
 import { PatientSearch } from "./Containers/patientSearch/PatientSearch";
 import { CagRegister } from "./Containers/cagRegister/CagRegister";
+import { LoginVersion } from "./Containers/loginVersion/LoginVersion";
 
 const MODULE_NAME = "bahmni.mfe.nextUi";
 
@@ -48,4 +49,9 @@ builder.createComponentWithTranslationForwarding(
 builder.createComponentWithTranslationForwarding(
   "CagRegister",
   CagRegister
+);
+
+builder.createComponentWithTranslationForwarding(
+  "LoginVersion",
+  LoginVersion
 );
