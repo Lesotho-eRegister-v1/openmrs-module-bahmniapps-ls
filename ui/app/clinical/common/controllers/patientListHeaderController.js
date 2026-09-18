@@ -9,7 +9,8 @@ angular.module('bahmni.clinical')
             $scope.retrospectivePrivilege = Bahmni.Common.Constants.retrospectivePrivilege;
             $scope.locationPickerPrivilege = Bahmni.Common.Constants.locationPickerPrivilege;
             $scope.onBehalfOfPrivilege = Bahmni.Common.Constants.onBehalfOfPrivilege;
-            $scope.selectedLocationUuid = {};
+            // $scope.selectedLocationUuid = {};
+	    $scope.selectedLocationUuid = ($bahmniCookieStore.get(Bahmni.Common.Constants.locationCookieName) || {}).uuid;
             $scope.getProviderList = function () {
                 return function (searchAttrs) {
                     return providerService.search(searchAttrs.term);
