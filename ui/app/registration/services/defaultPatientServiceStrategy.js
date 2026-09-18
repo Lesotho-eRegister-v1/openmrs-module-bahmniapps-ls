@@ -21,21 +21,37 @@ angular.module('bahmni.registration')
             return defer.promise;
         };
 
+        var nationalSearchTimeoutMessage = "National registry timed out. Try a more specific search (first name + surname), or try again later.";
+
+        var nationalSearchErrorMessage = function (status) {
+            if (status === 404) {
+                return "National MPI endpoint is not available on this OpenMRS (404). The /mpipatient API is missing from the local backend.";
+            }
+            // Proxy Timeout is 60s; client aborts slightly earlier. 502/504 often mean MPI/proxy timeout.
+            if (status === 502 || status === 504 || status === -1 || status === 0) {
+                return nationalSearchTimeoutMessage;
+            }
+            return "National search failed (HTTP " + status + ").";
+        };
+
         var searchHIE = function (config) {
             var defer = $q.defer();
             var patientSearchUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient";
             if (config && config.params.identifier) {
                 patientSearchUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient/exact";
             }
-            $http.get(patientSearchUrl, config).success(function (result) {
+            var requestConfig = angular.extend({}, config, {
+                // Fail before Bahmni proxy's 60s Timeout so the UI can show a clear message
+                // instead of an HTML 502 Proxy Error page.
+                timeout: (config && config.timeout) || 55000
+            });
+            $http.get(patientSearchUrl, requestConfig).success(function (result) {
                 defer.resolve(result);
             }).error(function (data, status) {
                 defer.reject({
                     data: data,
                     status: status,
-                    message: status === 404
-                        ? "National MPI endpoint is not available on this OpenMRS (404). The /mpipatient API is missing from the local backend."
-                        : ("National search failed (HTTP " + status + ").")
+                    message: nationalSearchErrorMessage(status)
                 });
             });
             return defer.promise;

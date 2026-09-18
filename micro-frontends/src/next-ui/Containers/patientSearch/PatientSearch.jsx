@@ -117,6 +117,20 @@ export function PatientSearch(props) {
     setSearched(false);
   };
 
+  const nationalSearchErrorMessage = (error) => {
+    const status = error?.status;
+    if (error?.message) {
+      return error.message;
+    }
+    if (status === 404) {
+      return "National MPI endpoint not found on this server (404).";
+    }
+    if (status === 502 || status === 504 || status === -1 || status === 0) {
+      return "National registry timed out. Try a more specific search (first name + surname), or try again later.";
+    }
+    return "National search failed. Check MPI connectivity and try again.";
+  };
+
   const runNationalSearch = async (event) => {
     event.preventDefault();
     if (!canSearchNational) {
@@ -135,12 +149,7 @@ export function PatientSearch(props) {
       setResults(normalizeResults(response?.pageOfResults || []));
     } catch (e) {
       setResults([]);
-      setError(
-        e?.message ||
-          (e?.status === 404
-            ? "National MPI endpoint not found on this server (404)."
-            : "National search failed. Check MPI connectivity and try again.")
-      );
+      setError(nationalSearchErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -295,8 +304,10 @@ export function PatientSearch(props) {
         <div className="ns-panel">
           <h3 className="ns-panel__title">National patient search</h3>
           <p className="ns-panel__hint">
-            Search the national MPI / HIE. Import a match to open or register
-            the patient locally.
+            Search the national MPI / HIE. Use first name and surname together
+            when possible. Slow names may take up to a minute; if the registry
+            times out, try a more specific search. Import a match to open or
+            register the patient locally.
           </p>
 
           <form className="ns-form" onSubmit={runNationalSearch}>
@@ -366,7 +377,9 @@ export function PatientSearch(props) {
 
           {error && <div className="ns-status ns-status--error">{error}</div>}
           {!error && loading && (
-            <div className="ns-status">Searching national registry…</div>
+            <div className="ns-status">
+              Searching national registry… this can take up to a minute.
+            </div>
           )}
           {!error && !loading && searched && results.length === 0 && (
             <div className="ns-status">No national matches found.</div>
