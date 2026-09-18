@@ -21,6 +21,66 @@ angular.module('bahmni.registration')
             return defer.promise;
         };
 
+        var nationalSearchTimeoutMessage = "National registry timed out. Try a more specific search (first name + surname), or try again later.";
+
+        var nationalSearchErrorMessage = function (status) {
+            if (status === 404) {
+                return "National MPI endpoint is not available on this OpenMRS (404). The /mpipatient API is missing from the local backend.";
+            }
+            // Proxy Timeout is 60s; client aborts slightly earlier. 502/504 often mean MPI/proxy timeout.
+            if (status === 502 || status === 504 || status === -1 || status === 0) {
+                return nationalSearchTimeoutMessage;
+            }
+            return "National search failed (HTTP " + status + ").";
+        };
+
+        var searchHIE = function (config) {
+            var defer = $q.defer();
+            var patientSearchUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient";
+            if (config && config.params.identifier) {
+                patientSearchUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient/exact";
+            }
+            var requestConfig = angular.extend({}, config, {
+                // Fail before Bahmni proxy's 60s Timeout so the UI can show a clear message
+                // instead of an HTML 502 Proxy Error page.
+                timeout: (config && config.timeout) || 55000
+            });
+            $http.get(patientSearchUrl, requestConfig).success(function (result) {
+                defer.resolve(result);
+            }).error(function (data, status) {
+                defer.reject({
+                    data: data,
+                    status: status,
+                    message: nationalSearchErrorMessage(status)
+                });
+            });
+            return defer.promise;
+        };
+
+        var importPatient = function (patient, config) {
+            var defer = $q.defer();
+            var extraIdentifiers = patient && patient.extraIdentifiers;
+            if (extraIdentifiers && typeof extraIdentifiers === "string") {
+                try {
+                    extraIdentifiers = JSON.parse(extraIdentifiers);
+                } catch (e) {
+                    extraIdentifiers = {};
+                }
+            }
+            var patientEcid = (extraIdentifiers && (extraIdentifiers.ECID || extraIdentifiers.ecid)) || patient.ecid;
+            if (!patientEcid) {
+                defer.reject({message: "Missing ECID for national patient import"});
+                return defer.promise;
+            }
+            var importPatientUrl = Bahmni.Common.Constants.bahmniSearchUrl + "/mpipatient?patientEcid=" + encodeURIComponent(patientEcid);
+            $http.post(importPatientUrl, config || {withCredentials: true}).success(function (result) {
+                defer.resolve(result);
+            }).error(function (error) {
+                defer.reject(error);
+            });
+            return defer.promise;
+        };
+
         var getByUuid = function (uuid) {
             var url = openmrsUrl + "/ws/rest/v1/patientprofile/" + uuid;
             var config = {
@@ -73,6 +133,8 @@ angular.module('bahmni.registration')
 
         return {
             search: search,
+            searchHIE: searchHIE,
+            importPatient: importPatient,
             get: getByUuid,
             create: create,
             update: update,

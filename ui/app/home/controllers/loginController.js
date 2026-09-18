@@ -1,14 +1,23 @@
 'use strict';
 
 angular.module('bahmni.home')
-    .controller('LoginController', ['$rootScope', '$scope', '$window', '$location', 'sessionService', 'initialData', 'spinner', '$q', '$stateParams', '$bahmniCookieStore', 'localeService', '$translate', 'userService', 'auditLogService', '$state',
-        function ($rootScope, $scope, $window, $location, sessionService, initialData, spinner, $q, $stateParams, $bahmniCookieStore, localeService, $translate, userService, auditLogService, $state) {
+    .controller('LoginController', ['$rootScope', '$scope', '$window', '$location', 'sessionService', 'initialData', 'spinner', '$q', '$stateParams', '$bahmniCookieStore', 'localeService', '$translate', 'userService', 'auditLogService', '$state', '$http',
+        function ($rootScope, $scope, $window, $location, sessionService, initialData, spinner, $q, $stateParams, $bahmniCookieStore, localeService, $translate, userService, auditLogService, $state, $http) {
             var redirectUrl = $location.search()['from'];
             var landingPagePath = "/dashboard";
             var loginPagePath = "/login";
             $scope.locations = initialData.locations;
             $scope.loginInfo = {};
             var localeLanguages = [];
+
+            // Same pattern as old eRegister: read version.json and show under login
+            $scope.eregisterVersion = null;
+            $http.get('version.json').then(function (response) {
+                var result = response.data || {};
+                if (result.day && result.month && result.year) {
+                    $scope.eregisterVersion = result.day + '-' + result.month + '-' + result.year;
+                }
+            });
 
             var getLocalTimeZone = function () {
                 var currentLocalTime = new Date().toString();

@@ -63,6 +63,7 @@
     <div class="warning-message">
         <span ng-if="warning"><i class="fa fa-exclamation-triangle" aria-hidden="true"></i> {{warning}}</span>
         <p>{{warningMessage | translate :timeZoneObject}} </p>
+        <p id="eregisterversion" ng-if="eregisterVersion">Version :{{ eregisterVersion }}</p>
     </div>
 
     <div ng-show="bottomLogos" class="bottom-logos-wrapper">

@@ -2,8 +2,8 @@
 
 angular.module('bahmni.registration')
     .controller('SearchPatientController', ['$rootScope', '$scope', '$location', '$window', 'spinner', 'patientService', 'appService',
-        'messagingService', '$translate', '$filter',
-        function ($rootScope, $scope, $location, $window, spinner, patientService, appService, messagingService, $translate, $filter) {
+        'messagingService', '$translate', '$filter', 'cagService',
+        function ($rootScope, $scope, $location, $window, spinner, patientService, appService, messagingService, $translate, $filter, cagService) {
             $scope.results = [];
             var searching = false;
             var maxAttributesFromConfig = 5;
@@ -37,6 +37,9 @@ angular.module('bahmni.registration')
             };
 
             var searchBasedOnQueryParameters = function (offset) {
+                if ($scope.searchDomain !== "local") {
+                    return;
+                }
                 if (!isUserPrivilegedForSearch()) {
                     showInsufficientPrivMessage();
                     return;
@@ -212,12 +215,117 @@ angular.module('bahmni.registration')
 
             var initialize = function () {
                 $scope.searchParameters = {};
+                $scope.searchDomain = "local";
+                $scope.patientSearchHostData = { domain: "local" };
                 $scope.searchActions = appService.getAppDescriptor().getExtensions("org.bahmni.registration.patient.search.result.action");
                 setPatientIdentifierSearchConfig();
                 setAddressSearchConfig();
                 setCustomAttributesSearchConfig();
                 setProgramAttributesSearchConfig();
                 setSearchResultsConfig();
+                setupPatientSearchHostApi();
+            };
+
+            var toNativePromise = function (angularPromise) {
+                return Promise.resolve(angularPromise);
+            };
+
+            var parseExtraIdentifiersOnPatient = function (patient) {
+                if (!patient) {
+                    return patient;
+                }
+                if (patient.extraIdentifiers && typeof patient.extraIdentifiers === "string") {
+                    try {
+                        patient.extraIdentifiers = JSON.parse(patient.extraIdentifiers);
+                    } catch (e) {
+                        patient.extraIdentifiers = {};
+                    }
+                }
+                return patient;
+            };
+
+            var setupPatientSearchHostApi = function () {
+                $scope.patientSearchHostApi = {
+                    onDomainChange: function (domain) {
+                        $scope.searchDomain = domain || "local";
+                        $scope.patientSearchHostData = { domain: $scope.searchDomain };
+                        $scope.results = [];
+                        $scope.noResultsMessage = null;
+                        if (!$scope.$$phase) {
+                            $scope.$apply();
+                        }
+                    },
+                    searchNational: function (params) {
+                        params = params || {};
+                        if (!isUserPrivilegedForSearch()) {
+                            showInsufficientPrivMessage();
+                            return Promise.reject({message: "Insufficient privilege"});
+                        }
+                        var searchPromise = patientService.searchHIE(
+                            params.givenName,
+                            params.familyName,
+                            params.identifier,
+                            params.nationalId,
+                            params.gender,
+                            $scope.addressSearchConfig.field,
+                            undefined,
+                            undefined,
+                            0,
+                            $scope.customAttributesSearchConfig.fields,
+                            $scope.programAttributesSearchConfig.field,
+                            undefined,
+                            $scope.addressSearchResultsConfig.fields,
+                            $scope.personSearchResultsConfig.fields
+                        ).then(function (response) {
+                            mapExtraIdentifiers(response);
+                            return response;
+                        });
+                        spinner.forPromise(searchPromise);
+                        return toNativePromise(searchPromise);
+                    },
+                    importPatient: function (patient) {
+                        if (!isUserPrivilegedForSearch()) {
+                            showInsufficientPrivMessage();
+                            return Promise.reject({message: "Insufficient privilege"});
+                        }
+                        parseExtraIdentifiersOnPatient(patient);
+                        var importPromise = patientService.importPatient(patient).then(function (response) {
+                            var imported = response;
+                            if (response && response.data) {
+                                imported = response.data;
+                            }
+                            if (imported && imported.length > 0) {
+                                var forwardUrl = appService.getAppDescriptor().getConfigValue("searchByIdForwardUrl") || "/patient/{{patientUuid}}";
+                                $location.url(appService.getAppDescriptor().formatUrl(forwardUrl, {'patientUuid': imported[0].uuid}));
+                                return imported[0];
+                            }
+                            throw {message: "National import returned no patient"};
+                        });
+                        spinner.forPromise(importPromise);
+                        return toNativePromise(importPromise);
+                    },
+                    searchCags: function () {
+                        if (!isUserPrivilegedForSearch()) {
+                            showInsufficientPrivMessage();
+                            return Promise.reject({message: "Insufficient privilege"});
+                        }
+                        var searchPromise = cagService.getAll();
+                        spinner.forPromise(searchPromise);
+                        return toNativePromise(searchPromise);
+                    },
+                    openCag: function (cagUuid) {
+                        $location.url('/cag/' + cagUuid);
+                        if (!$scope.$$phase) {
+                            $scope.$apply();
+                        }
+                    },
+                    createCag: function () {
+                        $location.url('/cag/new');
+                        if (!$scope.$$phase) {
+                            $scope.$apply();
+                        }
+                    }
+                };
             };
 
             var identifyParams = function (querystring) {
@@ -243,6 +351,9 @@ angular.module('bahmni.registration')
             });
 
             $scope.searchById = function () {
+                if ($scope.searchDomain !== "local") {
+                    return;
+                }
                 if (!isUserPrivilegedForSearch()) {
                     showInsufficientPrivMessage();
                     return;
@@ -309,6 +420,9 @@ angular.module('bahmni.registration')
             };
 
             $scope.searchPatients = function () {
+                if ($scope.searchDomain !== "local") {
+                    return;
+                }
                 if (!isUserPrivilegedForSearch()) {
                     showInsufficientPrivMessage();
                     return;
