@@ -5,6 +5,8 @@ angular.module('bahmni.registration')
         var baseUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/cag';
         var cagPatientUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/cagPatient';
         var cagVisitUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/cagVisit';
+        var visitUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/visit';
+        var encounterUrl = Bahmni.Registration.Constants.baseOpenMRSRESTURL + '/encounter';
 
         // Same concept/visit UUIDs used by the old CAG registration visit flow
         var VISIT_TYPE_UUID = "da0fffe2-a9c9-489a-b9b0-a5405032c465";
@@ -219,6 +221,48 @@ angular.module('bahmni.registration')
             };
         };
 
+        var jsonHeaders = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        };
+
+        // OpenMRS 2.5 does not persist the visit of encounters nested in a visit,
+        // so CAG members' REG encounters are saved without one and their visits
+        // never show in Clinical's active list.
+        var linkEncounterToVisit = function (visitUuid) {
+            return $http.get(visitUrl + '/' + visitUuid, {
+                params: {v: 'custom:(uuid,startDatetime,patient:(uuid))'},
+                withCredentials: true
+            }).then(function (visitResponse) {
+                var visit = visitResponse.data;
+                return $http.get(encounterUrl, {
+                    params: {
+                        patient: visit.patient.uuid,
+                        encounterType: ENCOUNTER_TYPE_UUID,
+                        v: 'custom:(uuid,encounterDatetime,visit:(uuid))'
+                    },
+                    withCredentials: true
+                }).then(function (encounterResponse) {
+                    var visitStart = new Date(visit.startDatetime).getTime();
+                    var unlinked = _.filter((encounterResponse.data && encounterResponse.data.results) || [], function (encounter) {
+                        return !encounter.visit && new Date(encounter.encounterDatetime).getTime() === visitStart;
+                    });
+                    return $q.all(_.map(unlinked, function (encounter) {
+                        return $http.post(encounterUrl + '/' + encounter.uuid, {visit: visit.uuid}, {
+                            withCredentials: true,
+                            headers: jsonHeaders
+                        });
+                    }));
+                });
+            });
+        };
+
+        var linkCagVisitEncounters = function (cagVisit) {
+            return $q.all(_.map((cagVisit && cagVisit.visits) || [], function (visit) {
+                return linkEncounterToVisit(visit.uuid);
+            }));
+        };
+
         var startVisit = function (cagUuid, attenderUuid, members, locationUuid, locationName) {
             var dateStarted = new Date().toISOString().slice(0, 19).replace("T", " ");
             var absentees = {};
@@ -247,12 +291,11 @@ angular.module('bahmni.registration')
 
             return $http.post(cagVisitUrl, payload, {
                 withCredentials: true,
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
+                headers: jsonHeaders
             }).then(function (response) {
-                return response.data;
+                return linkCagVisitEncounters(response.data).then(function () {
+                    return response.data;
+                });
             });
         };
 
