@@ -1078,7 +1078,9 @@ angular.module("bahmni.clinical").controller("ConsultationController", [
       $scope.consultation.preSaveHandler.fire();
       $scope.lastvisited = $scope.consultation.lastvisited;
       var selectedObsTemplate = $scope.consultation.selectedObsTemplate;
-      var tempConsultation = angular.copy($scope.consultation);
+      var _consultationForCopy = _.omit($scope.consultation, 'selectedObsTemplate');
+      var tempConsultation = angular.copy(_consultationForCopy);
+      tempConsultation.selectedObsTemplate = $scope.consultation.selectedObsTemplate;
       tempConsultation.observations = observationFilter.filter(
         tempConsultation.observations
       );
