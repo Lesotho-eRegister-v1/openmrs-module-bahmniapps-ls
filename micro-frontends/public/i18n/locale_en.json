@@ -33,5 +33,18 @@
   "UPDATE": "Update",
   "AKNOWLEDGE_BUTTON": "Acknowledge",
   "AKNOWLEDGEMENT_REQUIRED_TEXT": "Acknowledgement required",
-  "NO_DRUGS_TO_BE_AKNOWLEDGED_TEXT": "You have no new drugs to be acknowledged"
+  "NO_DRUGS_TO_BE_AKNOWLEDGED_TEXT": "You have no new drugs to be acknowledged",
+  "LAB_ORDER_BARCODE_HEADING": "Lab Order Barcodes",
+  "LAB_ORDER_BARCODE_PRINT_LABEL": "Print label",
+  "LAB_RESULT_NOTIFICATIONS_BELL_LABEL": "Lab results",
+  "LAB_RESULT_NOTIFICATIONS_HEADING": "Lab results",
+  "LAB_RESULT_NOTIFICATIONS_NEW_COUNT": "{count, plural, one {# new result} other {# new results}}",
+  "LAB_RESULT_NOTIFICATIONS_MARK_ALL_READ": "Mark all as read",
+  "LAB_RESULT_NOTIFICATIONS_EMPTY": "No results in the last 30 days",
+  "BLOOD_DRAW_REMINDER_HEADING": "Blood Draw Due",
+  "BLOOD_DRAW_REMINDER_MESSAGE": "This patient is due for a blood draw. Blood should be drawn every {months} months.",
+  "BLOOD_DRAW_REMINDER_LAST_DRAWN": "Last drawn",
+  "BLOOD_DRAW_REMINDER_DUE_DATE": "Due date",
+  "BLOOD_DRAW_REMINDER_OK": "OK",
+  "BLOOD_DRAW_REMINDER_OVERDUE": "({days, plural, one {# day} other {# days}} overdue)"
 }
