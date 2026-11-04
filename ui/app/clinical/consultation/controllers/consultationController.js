@@ -1058,12 +1058,13 @@ angular.module("bahmni.clinical").controller("ConsultationController", [
         return form.isAdded;
       });
       _.each(addedObservationForms, function (form) {
-        if (form.component && form.events && form.events.onFormSave) {
+        var component = form.component || (Bahmni.Clinical.formControlRegistry && Bahmni.Clinical.formControlRegistry[form.formUuid]);
+        if (component && form.events && form.events.onFormSave) {
           try {
-            form.component.state.data = runEventScript(
-              form.component.state.data,
+            component.state.data = runEventScript(
+              component.state.data,
               form.events.onFormSave,
-              form.component.props && form.component.props.patient
+              component.props && component.props.patient
             );
           } catch (error) {
             throw error;
@@ -1078,7 +1079,9 @@ angular.module("bahmni.clinical").controller("ConsultationController", [
       $scope.consultation.preSaveHandler.fire();
       $scope.lastvisited = $scope.consultation.lastvisited;
       var selectedObsTemplate = $scope.consultation.selectedObsTemplate;
-      var tempConsultation = angular.copy($scope.consultation);
+      var _consultationForCopy = _.omit($scope.consultation, 'selectedObsTemplate');
+      var tempConsultation = angular.copy(_consultationForCopy);
+      tempConsultation.selectedObsTemplate = $scope.consultation.selectedObsTemplate;
       tempConsultation.observations = observationFilter.filter(
         tempConsultation.observations
       );
@@ -1174,8 +1177,9 @@ angular.module("bahmni.clinical").controller("ConsultationController", [
         _.each(
           $scope.consultation.observationForms,
           function (observationForm) {
-            if (observationForm.component && observationForm.isAdded) {
-              var formObservations = observationForm.component.getValue();
+            var formComponent = observationForm.component || (Bahmni.Clinical.formControlRegistry && Bahmni.Clinical.formControlRegistry[observationForm.formUuid]);
+            if (formComponent && observationForm.isAdded) {
+              var formObservations = formComponent.getValue();
               _.each(formObservations.observations, function (obs) {
                 tempConsultation.observations.push(obs);
               });
@@ -1188,8 +1192,9 @@ angular.module("bahmni.clinical").controller("ConsultationController", [
     var isObservationFormValid = function () {
       var valid = true;
       _.each($scope.consultation.observationForms, function (observationForm) {
-        if (valid && observationForm.component) {
-          var value = observationForm.component.getValue();
+        var formComponent = observationForm.component || (Bahmni.Clinical.formControlRegistry && Bahmni.Clinical.formControlRegistry[observationForm.formUuid]);
+        if (valid && formComponent) {
+          var value = formComponent.getValue();
           if (value.errors) {
             messagingService.showMessage(
               "error",

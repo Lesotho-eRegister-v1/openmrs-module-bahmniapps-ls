@@ -1,5 +1,11 @@
 'use strict';
 
+// Shared registry so other controllers (consultationController) can reach the
+// React instance without it living on $scope.form (which Angular deep-copies).
+window.Bahmni = window.Bahmni || {};
+Bahmni.Clinical = Bahmni.Clinical || {};
+Bahmni.Clinical.formControlRegistry = Bahmni.Clinical.formControlRegistry || {};
+
 angular.module('bahmni.common.conceptSet')
     .directive('formControls', ['formService', 'spinner', '$timeout', '$translate',
         function (formService, spinner, $timeout, $translate) {
@@ -13,6 +19,7 @@ angular.module('bahmni.common.conceptSet')
             };
 
             var controller = function ($scope) {
+                var reactComponent;
                 var formUuid = $scope.form.formUuid;
                 var formVersion = $scope.form.formVersion;
                 var formName = $scope.form.formName;
@@ -35,12 +42,12 @@ angular.module('bahmni.common.conceptSet')
                                     .then(function (response) {
                                         var formTranslations = !_.isEmpty(response.data) ? response.data[0] : {};
                                         loadedFormTranslations[formUuid] = formTranslations;
-                                        $scope.form.component = renderWithControls(formDetails, formObservations,
+                                        reactComponent = Bahmni.Clinical.formControlRegistry[formUuid] = renderWithControls(formDetails, formObservations,
                                             formUuid, collapse, $scope.patient, validateForm, locale, formTranslations);
                                     }, function () {
                                         var formTranslations = {};
                                         loadedFormTranslations[formUuid] = formTranslations;
-                                        $scope.form.component = renderWithControls(formDetails, formObservations,
+                                        reactComponent = Bahmni.Clinical.formControlRegistry[formUuid] = renderWithControls(formDetails, formObservations,
                                             formUuid, collapse, $scope.patient, validateForm, locale, formTranslations);
                                     })
                                 );
@@ -51,7 +58,7 @@ angular.module('bahmni.common.conceptSet')
                 } else {
                     $timeout(function () {
                         $scope.form.events = loadedFormDetails[formUuid].events;
-                        $scope.form.component = renderWithControls(loadedFormDetails[formUuid], formObservations,
+                        reactComponent = Bahmni.Clinical.formControlRegistry[formUuid] = renderWithControls(loadedFormDetails[formUuid], formObservations,
                             formUuid, collapse, $scope.patient, validateForm, locale, loadedFormTranslations[formUuid]);
                         unMountReactContainer($scope.form.formUuid);
                     }, 0, false);
@@ -60,15 +67,16 @@ angular.module('bahmni.common.conceptSet')
                 $scope.$watch('form.collapseInnerSections', function () {
                     var collapse = $scope.form.collapseInnerSections && $scope.form.collapseInnerSections.value;
                     if (loadedFormDetails[formUuid]) {
-                        $scope.form.component = renderWithControls(loadedFormDetails[formUuid], formObservations,
+                        reactComponent = Bahmni.Clinical.formControlRegistry[formUuid] = renderWithControls(loadedFormDetails[formUuid], formObservations,
                             formUuid, collapse, $scope.patient, validateForm, locale, loadedFormTranslations[formUuid]);
                     }
                 });
 
                 $scope.$on('$destroy', function () {
+                    if (Bahmni.Clinical.formControlRegistry) { delete Bahmni.Clinical.formControlRegistry[formUuid]; }
                     if ($scope.$parent.consultation && $scope.$parent.consultation.observationForms) {
-                        if ($scope.form.component) {
-                            var formObservations = $scope.form.component.getValue();
+                        if (reactComponent) {
+                            var formObservations = reactComponent.getValue();
                             $scope.form.observations = formObservations.observations;
 
                             var hasError = formObservations.errors;
