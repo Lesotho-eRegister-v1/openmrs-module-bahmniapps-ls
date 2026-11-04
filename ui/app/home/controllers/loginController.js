@@ -12,6 +12,7 @@ angular.module('bahmni.home')
 
             // Same pattern as old eRegister: read version.json and show under login
             $scope.eregisterVersion = null;
+            $scope.releaseNotesUrl = Bahmni.Common.Constants.eregisterReleaseNotesUrl;
             $http.get('version.json').then(function (response) {
                 var result = response.data || {};
                 if (result.day && result.month && result.year) {

@@ -312,6 +312,7 @@ module.exports = function (grunt) {
                             'styles/**/*.css',
                             'styles/fonts/**/*',
                             'clinical/config/*.json',
+                            'home/version.json',
                             'i18n/**/*.json',
                             'lib/**/*',
                             "micro-frontends-dist/i18n/**/*.json"
