@@ -1,7 +1,7 @@
 'use strict';
 
 describe('primaryContactValidator', function () {
-    var validator, ngDialog, closeDialog, $rootScope, input, form;
+    var validator, ngDialog, closeDialog, closeDialogAndValidate, save, $rootScope, input, form;
 
     beforeEach(module('bahmni.registration'));
 
@@ -13,12 +13,19 @@ describe('primaryContactValidator', function () {
     beforeEach(inject(function (primaryContactValidator, _$rootScope_, $q) {
         validator = primaryContactValidator;
         $rootScope = _$rootScope_;
-        var closed = $q.defer();
-        closeDialog = function () {
-            closed.resolve();
-            $rootScope.$digest();
+        save = jasmine.createSpy('save').and.returnValue('saveResult');
+        ngDialog.open.and.callFake(function () {
+            var closed = $q.defer();
+            closeDialog = function (value) {
+                closed.resolve({value: value});
+                $rootScope.$digest();
+            };
+            return {closePromise: closed.promise};
+        });
+        closeDialogAndValidate = function (value) {
+            validator.validateThen(save);
+            closeDialog(value);
         };
-        ngDialog.open.and.returnValue({closePromise: closed.promise});
         form = angular.element('<form><span><input type="text" id="telephoneNumber"></span></form>');
         angular.element(document.body).append(form);
         input = form.find('input')[0];
@@ -37,37 +44,96 @@ describe('primaryContactValidator', function () {
         angular.element(input).triggerHandler('input');
     };
 
-    it('should allow saving when the field has a value', function () {
+    it('should save straight away when the field has a value', function () {
         input.value = '0821234567';
 
-        expect(validator.validate()).toBe(true);
+        expect(validator.validateThen(save)).toBe('saveResult');
+        expect(save).toHaveBeenCalled();
         expect(ngDialog.open).not.toHaveBeenCalled();
         expect(arrow()).toBeNull();
     });
 
-    it('should block saving, alert and show the arrow when the field is empty', function () {
-        expect(validator.validate()).toBe(false);
+    it('should warn instead of saving when the field is empty', function () {
+        validator.validateThen(save);
+        $rootScope.$digest();
+
         expect(ngDialog.open.calls.mostRecent().args[0].template).toBe('views/primaryContactRequired.html');
-        expect(arrow()).not.toBeNull();
+        expect(save).not.toHaveBeenCalled();
     });
 
     it('should treat whitespace as empty', function () {
         input.value = '   ';
 
-        expect(validator.validate()).toBe(false);
+        validator.validateThen(save);
+
+        expect(ngDialog.open).toHaveBeenCalled();
+        expect(save).not.toHaveBeenCalled();
     });
 
-    it('should allow saving when the field is not on the form', function () {
+    it('should release the submit lock if the dialog closes on navigation', function () {
+        validator.validateThen(save);
+
+        expect(ngDialog.open.calls.mostRecent().args[0].closeByNavigation).toBe(true);
+    });
+
+    it('should save without an arrow when the user continues without a contact', function () {
+        var settled = jasmine.createSpy('settled');
+        validator.validateThen(save).then(settled);
+
+        closeDialog('continueWithoutContact');
+
+        expect(save).toHaveBeenCalled();
+        expect(settled).toHaveBeenCalledWith('saveResult');
+        expect(arrow()).toBeNull();
+    });
+
+    it('should settle without saving, and point at the field, when the user goes back to add a contact', function () {
+        var settled = jasmine.createSpy('settled');
+        spyOn(input, 'focus');
+        spyOn(input, 'scrollIntoView');
+        validator.validateThen(save).then(settled);
+        expect(input.focus).not.toHaveBeenCalled();
+
+        closeDialog();
+
+        expect(save).not.toHaveBeenCalled();
+        expect(settled).toHaveBeenCalled();
+        expect(arrow()).not.toBeNull();
+        expect(input.scrollIntoView).toHaveBeenCalled();
+        expect(input.focus).toHaveBeenCalled();
+    });
+
+    it('should not save when the dialog is dismissed with Esc', function () {
+        closeDialogAndValidate('$escape');
+
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    it('should remove an earlier arrow when the user later continues without a contact', function () {
+        closeDialogAndValidate();
+        expect(arrow()).not.toBeNull();
+
+        closeDialogAndValidate('continueWithoutContact');
+
+        expect(save).toHaveBeenCalled();
+        expect(arrow()).toBeNull();
+    });
+
+    it('should save straight away when the field is not on the form', function () {
         form.remove();
 
-        expect(validator.validate()).toBe(true);
+        validator.validateThen(save);
+
+        expect(save).toHaveBeenCalled();
         expect(ngDialog.open).not.toHaveBeenCalled();
     });
 
-    it('should allow saving when the field is read-only', function () {
+    it('should save straight away when the field is read-only', function () {
         input.disabled = true;
 
-        expect(validator.validate()).toBe(true);
+        validator.validateThen(save);
+
+        expect(save).toHaveBeenCalled();
     });
 
     it('should expand only the section containing the field', function () {
@@ -79,37 +145,21 @@ describe('primaryContactValidator', function () {
             }
         };
 
-        validator.validate();
+        validator.validateThen(save);
 
         expect(contactSection.expand).toBe(true);
         expect(otherSection.expand).toBe(false);
     });
 
-    it('should show only one arrow when save is clicked repeatedly', function () {
-        validator.validate();
-        validator.validate();
+    it('should show only one arrow when the user goes back repeatedly', function () {
+        closeDialogAndValidate();
+        closeDialogAndValidate();
 
         expect(form[0].querySelectorAll('.primary-contact-arrow').length).toBe(1);
     });
 
-    it('should not stack dialogs if the form is resubmitted while one is open', function () {
-        validator.validate();
-        expect(validator.validate()).toBe(false);
-
-        expect(ngDialog.open.calls.count()).toBe(1);
-    });
-
-    it('should open the dialog again on a later save', function () {
-        validator.validate();
-        closeDialog();
-
-        validator.validate();
-
-        expect(ngDialog.open.calls.count()).toBe(2);
-    });
-
     it('should remove the arrow when a value is typed, but not for whitespace', function () {
-        validator.validate();
+        closeDialogAndValidate();
 
         typeValue('  ');
         expect(arrow()).not.toBeNull();
@@ -119,26 +169,13 @@ describe('primaryContactValidator', function () {
     });
 
     it('should keep the arrow away if the field is cleared, until the next save', function () {
-        validator.validate();
+        closeDialogAndValidate();
         typeValue('0');
 
         typeValue('');
         expect(arrow()).toBeNull();
 
-        expect(validator.validate()).toBe(false);
+        closeDialogAndValidate();
         expect(arrow()).not.toBeNull();
-    });
-
-    it('should focus the field only after the alert closes', function () {
-        spyOn(input, 'focus');
-        spyOn(input, 'scrollIntoView');
-        validator.validate();
-        $rootScope.$digest();
-        expect(input.focus).not.toHaveBeenCalled();
-
-        closeDialog();
-
-        expect(input.scrollIntoView).toHaveBeenCalled();
-        expect(input.focus).toHaveBeenCalled();
     });
 });

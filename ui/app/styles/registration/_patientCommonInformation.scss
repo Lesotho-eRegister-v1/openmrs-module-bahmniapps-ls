@@ -374,12 +374,17 @@ section.form-field-inline{
     margin: 0;
   }
 
-  button.confirm {
+  button.confirm,
+  button.primary-contact-continue {
     display: block;
     width: 100%;
     max-width: none;
     margin: 20px 0 0;
     float: none;
+  }
+
+  button.primary-contact-continue {
+    margin-top: 8px;
   }
 }
 

@@ -194,10 +194,7 @@ angular.module('bahmni.registration')
                 return deferred.promise;
             };
 
-            $scope.create = function () {
-                if (!primaryContactValidator.validate()) {
-                    return $q.when({});
-                }
+            var savePatient = function () {
                 addNewRelationships();
                 var errorMessages = Bahmni.Common.Util.ValidationUtil.validate($scope.patient, $scope.patientConfiguration.attributeTypes);
                 if (errorMessages.length > 0) {
@@ -212,6 +209,10 @@ angular.module('bahmni.registration')
                         errorMessage = undefined;
                     }
                 });
+            };
+
+            $scope.create = function () {
+                return primaryContactValidator.validateThen(savePatient);
             };
 
             $scope.afterSave = function () {
