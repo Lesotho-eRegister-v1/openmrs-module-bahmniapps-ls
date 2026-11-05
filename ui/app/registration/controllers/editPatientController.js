@@ -70,10 +70,7 @@ angular.module('bahmni.registration')
                 spinner.forPromise($q.all([getPatientPromise, isDigitized, identifiers]));
             })();
 
-            $scope.update = function () {
-                if (!primaryContactValidator.validate()) {
-                    return $q.when({});
-                }
+            var savePatient = function () {
                 addNewRelationships();
                 var errorMessages = Bahmni.Common.Util.ValidationUtil.validate($scope.patient, $scope.patientConfiguration.attributeTypes);
                 if (errorMessages.length > 0) {
@@ -90,6 +87,10 @@ angular.module('bahmni.registration')
                         $scope.actions.followUpAction(patientProfileData);
                     }
                 }));
+            };
+
+            $scope.update = function () {
+                return primaryContactValidator.validateThen(savePatient);
             };
 
             var addNewRelationships = function () {
